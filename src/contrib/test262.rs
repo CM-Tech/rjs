@@ -21,7 +21,7 @@ impl Test262Runner {
 fn walk_dir(runner: &mut Runner, dir: &str) {
     let mut children = Vec::new();
     let full_dir = format!("tests/tc39/test/{}", dir);
-    
+
     for entry in read_dir(&full_dir).ok().unwrap() {
         let entry = entry
             .ok().unwrap()
@@ -30,17 +30,17 @@ fn walk_dir(runner: &mut Runner, dir: &str) {
             .file_name().unwrap()
             .to_str().unwrap()
             .to_string();
-        
+
         if dir.len() == 0 {
             match &*entry.to_ascii_lowercase() {
                 "language" | "built-ins" => {},
-                _ => continue 
+                _ => continue
             }
         }
-        
+
         children.push(entry);
     }
-    
+
     children.sort_by(|a, b| {
         fn get_primary_order(name: &str) -> usize {
             match name {
@@ -49,41 +49,41 @@ fn walk_dir(runner: &mut Runner, dir: &str) {
                 _ => unreachable!()
             }
         }
-        
+
         fn build_parts(string: &str) -> Vec<String> {
             let mut in_digits = false;
             let mut buf = String::new();
             let mut parts = Vec::new();
-            
+
             for c in string.chars() {
                 if c.is_digit(10) != in_digits {
                     if buf.len() > 0 {
                         parts.push(buf);
                         buf = String::new();
                     }
-                    
+
                     in_digits = c.is_digit(10);
                 }
-                
+
                 buf.push(c);
             }
-            
+
             if buf.len() > 0 {
                 parts.push(buf);
             }
-            
+
             parts
         }
-        
+
         let a = a.to_ascii_lowercase();
         let b = b.to_ascii_lowercase();
-        
+
         if dir.len() == 0 {
             get_primary_order(&a).cmp(&get_primary_order(&b))
         } else {
             let a_parts = build_parts(&a);
             let b_parts = build_parts(&b);
-            
+
             for i in 0..min(a_parts.len(), b_parts.len()) {
                 if let Ok(a_value) = a_parts[i].parse::<usize>() {
                     if let Ok(b_value) = b_parts[i].parse::<usize>() {
@@ -93,21 +93,21 @@ fn walk_dir(runner: &mut Runner, dir: &str) {
                         }
                     }
                 }
-                
+
                 match a_parts[i].cmp(&b_parts[i]) {
                     order @ Ordering::Greater | order @ Ordering::Less => return order,
                     _ => {}
                 }
             }
-            
+
             a_parts.len().cmp(&b_parts.len())
         }
     });
-    
+
     for child in children {
         let child_dir = if dir.len() == 0 { child.clone() } else { format!("{}/{}", dir, child) };
         let child_full_dir = format!("{}/{}", full_dir, child);
-        
+
         if metadata(&child_full_dir).ok().unwrap().is_dir() {
             walk_dir(runner, &child_dir);
         } else if child.ends_with(".js") {
@@ -124,18 +124,18 @@ struct Runner {
 impl Runner {
     fn new() -> Runner {
         // Load the list of tests that succeeded last time.
-        
+
         let mut skip = if let Ok(mut file) = File::open("succeeded") {
             let mut content = String::new();
             file.read_to_string(&mut content).ok().unwrap();
-            
+
             content.split('\n').map(|str| str.to_string()).collect::<HashSet<_>>()
         } else {
             HashSet::new()
         };
-        
+
         let mut file = File::open("test262-ignore.json").ok().unwrap();
-        
+
         match Json::from_reader(&mut file) {
             Ok(json) => {
                 if let Json::Object(object) = json {
@@ -148,29 +148,29 @@ impl Runner {
             }
             Err(..) => panic!("could not read test262-ignore.json")
         }
-        
+
         Runner {
             skip: skip,
             seen: 0
         }
     }
-    
+
     fn run(&mut self, file: String) {
         self.seen += 1;
-        
+
         if self.skip.contains(&file.to_string()) {
             return;
         }
-        
+
         debug::reset();
-        
+
         println!("RUNNING {}", file);
-        
+
         let result = {
             let file = file.clone();
             thread::spawn(move || run_safe(file)).join()
         };
-        
+
         match result {
             Ok(..) => {
                 let mut out = OpenOptions::new()
@@ -179,15 +179,15 @@ impl Runner {
                     .open("succeeded")
                     .ok()
                     .unwrap();
-                
+
                 write!(out, "{}\n", file).ok().unwrap();
             },
             Err(error) => {
                 print!("{}", debug::reset());
-                
+
                 let progress = (self.seen as f64 / 13360.0) * 100.0;
                 let prefix = format!("[{:.1}%] ", progress);
-                
+
                 if let Some(string) = error.downcast_ref::<String>() {
                     panic!("{}{}", prefix, string);
                 } else if let Some(string) = error.downcast_ref::<&str>() {
@@ -202,12 +202,12 @@ impl Runner {
 
 fn run_safe(file: String) {
     let file = format!("tests/tc39/test/{}", file);
-    
+
     let mut js = String::new();
     File::open(&file).ok().unwrap().read_to_string(&mut js).ok();
-    
+
     let header = TestHeader::parse(&js);
-    
+
     let negative = header.headers.get("negative").map(|header|
         match *header {
             Header::String(ref negative) => negative.to_string(),
@@ -219,16 +219,16 @@ fn run_safe(file: String) {
             }
         }
     );
-    
+
     let only_strict = header.headers.get("flags").map(|header|
         match *header {
             Header::String(ref flag) => flag == "onlyStrict",
             Header::List(ref list) => list.iter().any(|flag| flag == "onlyStrict")
         }
     ).unwrap_or(false);
-    
+
     let mut is_es6 = header.headers.get("es6id").is_some();
-    
+
     if let Some(header) = header.headers.get("features") {
         if let Header::List(ref items) = *header {
             for item in items {
@@ -241,17 +241,17 @@ fn run_safe(file: String) {
             }
         }
     }
-    
+
     if is_es6 {
         return;
     }
-    
+
     let mut includes = vec![
         "sta.js".to_string(),
         "cth.js".to_string(),
         "assert.js".to_string()
     ];
-    
+
     if let Some(header) = header.headers.get("includes") {
         if let Header::List(ref items) = *header {
             for item in items {
@@ -259,63 +259,63 @@ fn run_safe(file: String) {
             }
         }
     }
-    
+
     // First try running with debug disabled. If this succeeds, we stop here.
-    
+
     if let Ok(mut env) = JsEnv::new() {
         for include in &includes {
             env.run(&("tests/tc39/harness/".to_string() + include)).ok().unwrap();
         }
-        
+
         if env.run_strict(&file, only_strict).is_ok() {
             return;
         }
     }
-    
+
     // There was an error. Enable debugging and retry.
-    
+
     debug::debug_enable(true);
-    
+
     let mut env = JsEnv::new().ok().unwrap();
-    
+
     for include in &includes {
         debugln!("INCLUDING {}", include);
         env.run(&("tests/tc39/harness/".to_string() + include)).ok().unwrap();
     }
-    
+
 //    debug::reset();
-    
+
     match env.run_strict(&file, only_strict) {
         Ok(_) => {
             if let Some(negative) = negative {
                 panic!("expected exception {} from negative test", negative);
             }
-            
+
             panic!("test failed before; why isn't it failing now?");
         },
         Err(error) => {
             let _scope = env.new_local_scope();
-            
+
             let error = error.as_runtime(&mut env).as_value(&env);
-            
+
             let error = if let Ok(error) = error.to_string(&mut env) {
                 let mut error = error.to_string();
-                
+
                 if let Some(negative) = negative {
                     if negative == "." || error == negative || error.starts_with(&(negative.clone() + ":")) {
                         return;
                     } else {
                         use std::fmt::Write;
-                        
+
                         write!(error, ", expected exception {}", &negative).ok();
                     }
                 }
-                
+
                 error
             } else {
                 "(cannot convert error to string)".to_string()
             };
-            
+
             panic!("{}: uncaught {}", file, error)
         }
     }
@@ -338,32 +338,32 @@ impl TestHeader {
                     return;
                 }
             }
-            
+
             headers.insert(index, header);
         }
-        
+
         let mut headers = HashMap::new();
-        
+
         if let Some(start) = js.find("/*---") {
             if let Some(end) = js[start..js.len()].find("---*/") {
                 let yaml = js[start + 5..start + end].to_string();
-                let mut indent = -1;
+                let mut indent:i64 = -1;
                 let mut index = None;
                 let mut header = None;
-                
+
                 for line in yaml.lines().map(|line| line.trim_right()).filter(|line| line.len() > 0) {
                     if indent == -1 {
                         let chars = line.chars().collect::<Vec<_>>();
-                        
+
                         for i in 0.. {
                             if !chars[i].is_whitespace() {
-                                indent = i;
+                                indent = i as i64;
                                 break;
                             }
                         }
                     }
-                    
-                    let chars = line[indent..].chars().collect::<Vec<_>>();
+
+                    let chars = line[(indent as usize)..].chars().collect::<Vec<_>>();
 
                     if chars[0].is_whitespace() {
                         if let Some(ref mut header) = header {
@@ -392,7 +392,7 @@ impl TestHeader {
                         if header.is_some() {
                             add_header(&mut headers, index.unwrap(), header.unwrap());
                         }
-                        
+
                         if chars[chars.len() - 1] == '>' {
                             let mut offset = chars.len() - 1;
                             while chars[offset] != ':' {
@@ -405,7 +405,7 @@ impl TestHeader {
                             while chars[offset] != ':' {
                                 offset -= 1;
                             }
-                            
+
                             index = None;
                             header = None;
                             add_header(
@@ -419,13 +419,13 @@ impl TestHeader {
                         }
                     }
                 }
-                
+
                 if header.is_some() {
                     add_header(&mut headers, index.unwrap(), header.unwrap());
                 }
             }
         }
-        
+
         TestHeader {
             headers: headers
         }

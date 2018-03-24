@@ -70,11 +70,11 @@ impl FunctionSlotRef {
     pub fn function(&self) -> FunctionRef {
         self.0
     }
-    
+
     pub fn slot(&self) -> SlotRef {
         self.1
     }
-    
+
     pub fn depth(&self) -> u32 {
         self.2
     }
@@ -214,12 +214,12 @@ pub enum Expr {
     Literal(Lit),
     MemberDot(Box<Expr>, Name),
     MemberIndex(Box<Expr>, ExprSeq),
-    Missing,
+    Missing(),
     New(Box<Expr>),
     ObjectLiteral(Vec<Property>),
     Paren(ExprSeq),
     Ternary(Box<Expr>, Box<Expr>, Box<Expr>),
-    This,
+    This(),
     Unary(Op, Box<Expr>),
     Cast(CastType, Box<Expr>)
 }
